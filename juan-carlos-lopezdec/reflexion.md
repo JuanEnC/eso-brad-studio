@@ -10,7 +10,7 @@
 
 ### Tus intereses y experiencias previas relacionadas con videojuegos o desarrollo
 
-Desde niño, los videojuegos han sido una constante en mi vida. Comencé con aquellas tardes de consola en la Xbox original y la Xbox 360, hasta que finalmente pude adquirir una PC que me sirve con un doble propósito: jugar y sacar adelante la carrera de Ingeniería en Software. 
+Desde niño, los videojuegos han sido una constante en mi vida. Comencé con la consola de Xbox y la Xbox 360, hasta que finalmente pude adquirir una PC que me sirve con un doble propósito: jugar y sacar adelante la carrera de Ingeniería en Software. 
 
 No me considero un jugador competitivo ni el más hábil; para mí, el verdadero valor del *gaming* está en divertirme y compartir tiempo con amigos. Esta cercanía con la tecnología despertó mi curiosidad temprana, llevándome a dar mis primeros pasos en el desarrollo desde la secundaria con proyectos muy básicos. Aunque la preparatoria y la universidad me han dado fundamentos matemáticos y de programación sólidos, la mayor parte de mi experiencia real la he construido por mi cuenta, explorando tecnologías de forma autodidacta.
 
