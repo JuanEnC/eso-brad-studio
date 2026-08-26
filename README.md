@@ -19,7 +19,7 @@ Actualmente, nuestro principal interés y objetivo de desarrollo es la creación
 A continuación se encuentran los enlaces a las carpetas de trabajo de cada miembro del equipo, donde se almacenará el progreso individual, prototipos y aportes específicos.
 
 *   [Juan Carlos Lopez de Cardenas Avelar](./juan-carlos-lopezdec)
-*   [Rogelio Santio Velasco Perez](./alfredo-rocha)
+*   [Rogelio Santio Velasco Perez](./rogelio-velasco)
 *   [Hiram Morales Moreno](./hiram-morales)
 *   [Alfredo Rocha Pizano](./alfredo-rocha)
 
