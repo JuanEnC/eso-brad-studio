@@ -1,7 +1,9 @@
 # Actividad 6. Propuesta conceptual de videojuego
 
 **Docente:** MIGUEL ANGEL RODRIGUEZ ORTIZ
+
 **Estudiante:** Juan Carlos Lopez de Cárdenas Avelar
+
 **Fecha:** 28 de agosto de 2026
 
 ---
@@ -27,7 +29,7 @@ Sobrevivir el mayor tiempo posible para limpiar la mayor cantidad de salas, romp
 
 - **Confinamiento arquitectónico:** El avance es estrictamente por salas instanciadas y pre-diseñadas; no es un mundo abierto y no se puede huir del mapa establecido ni avanzar sin despejar la amenaza.
 - **Penalización por muerte (Muerte parcial):** Al llegar a cero puntos de salud, el jugador pierde el 100% de su _Equipamiento Efímero_ de esa partida.
-- **Conservación de progreso:** El jugador retiene toda el _AURA_ recolectada y los _Vestigios_ obtenidos, asegurando que ninguna partida sea una pérdida total de tiempo.
+- **Conservación de progreso:** El jugador retiene toda el _AURA_ farmeada y los _Vestigios_ obtenidos, asegurando que ninguna partida sea una pérdida total de tiempo.
 
 ### 4. Experiencia buscada (Estética)
 
