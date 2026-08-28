@@ -1,8 +1,10 @@
 # Actividad 4: Lectura y discusión de modelos heurísticos
 
-**Docente:** MIGUEL ANGEL RODRIGUEZ ORTIZ
-**Estudiante:** Juan Carlos Lopez de Cárdenas Avelar
-**Fecha:** 26 de agosto de 2026
+**Docente:**  MIGUEL ANGEL RODRIGUEZ ORTIZ
+
+**Estudiante:**  Juan Carlos Lopez de Cárdenas Avelar
+
+**Fecha:**  26 de agosto de 2026
 
 ---
 
