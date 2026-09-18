@@ -4,8 +4,11 @@
 **Docente:** MIGUEL ANGEL RODRIGUEZ ORTIZ  
 **Estudiantes:** 
 Juan Carlos Lopez de Cárdenas Avelar
+
 Rogelio Santiago Velasco Pérez
+
 Hiram Morales Moreno
+
 Alfredo Rocha Pizano
 
 **Fecha:** 17 de septiembre de 2026  
