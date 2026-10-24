@@ -1,1 +1,0 @@
-Desarrollo activo del videojuego

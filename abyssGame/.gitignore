@@ -1,0 +1,14 @@
+.godot/
+.vscode/
+.idea/
+.codex/
+.agents/
+.validation/
+docs/
+output/
+tests/
+tools/
+tmp/
+*.tmp
+*.log
+*.bak
