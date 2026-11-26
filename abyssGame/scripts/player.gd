@@ -2,7 +2,7 @@ class_name AbyssPlayer
 extends CharacterBody2D
 
 signal feedback(kind: String, where: Vector2)
-signal fired(origin: Vector2, direction: Vector2)
+signal fired(origin: Vector2, direction: Vector2, critical: bool)
 signal died
 signal health_changed(current: int, maximum: int)
 
@@ -17,6 +17,9 @@ var parry_until: int = -1
 var parry_ready: int = 0
 var shot_ready: int = 0
 var invulnerable_until: int = -1
+var armor_until: int = -1
+var upgrade_ranks: Dictionary = {}
+var critical_shots: int = 0
 var max_health: int:
 	get: return tuning.player_max_health if tuning != null else 3
 var health: int = 3:
@@ -25,7 +28,6 @@ var health: int = 3:
 		if health != clamped:
 			health = clamped
 			health_changed.emit(health, max_health)
-var practice_invulnerable: bool = false
 var hope: float = 100.0
 var shots: int = 0
 var parries: int = 0
@@ -79,7 +81,7 @@ func _physics_process(delta: float) -> void:
 	if is_dashing():
 		velocity = dash_direction * tuning.dash_speed
 	else:
-		var speed := tuning.move_speed * (0.45 if hope <= 1.0 else 1.0)
+		var speed := movement_speed() * (0.45 if hope <= 1.0 else 1.0)
 		velocity = velocity.move_toward(movement * speed, (tuning.acceleration if movement.length() > 0 else tuning.deceleration) * delta)
 	move_and_slide()
 	queue_redraw()
@@ -89,6 +91,18 @@ func is_dashing() -> bool:
 
 func is_parrying() -> bool:
 	return tick < parry_until
+
+func upgrade_rank(id: String) -> int:
+	return upgrade_ranks.get(id, 0)
+
+func movement_speed() -> float:
+	return tuning.move_speed + 25.0 * upgrade_rank("move")
+
+func fire_interval() -> int:
+	return maxi(1, tuning.shot_cooldown_frames - 2 * upgrade_rank("rate"))
+
+func projectile_damage() -> int:
+	return tuning.projectile_damage + upgrade_rank("power")
 
 func try_dash(movement: Vector2) -> bool:
 	if not active or tick < dash_ready or is_parrying():
@@ -111,10 +125,14 @@ func try_parry() -> bool:
 func try_shoot() -> bool:
 	if not active or tick < shot_ready or is_dashing() or is_parrying():
 		return false
-	shot_ready = tick + tuning.shot_cooldown_frames
+	shot_ready = tick + fire_interval()
 	shots += 1
-	fired.emit(global_position + aim * 22.0, aim)
-	feedback.emit("shot", global_position)
+	var critical := false
+	if upgrade_rank("critical") > 0:
+		critical_shots += 1
+		critical = critical_shots % 3 == 0
+	fired.emit(global_position + aim * 12.0, aim, critical)
+	feedback.emit("critical_shot" if critical else "shot", global_position)
 	return true
 
 func receive_attack(source: Vector2) -> String:
@@ -123,13 +141,14 @@ func receive_attack(source: Vector2) -> String:
 	if is_parrying() and global_position.distance_to(source) <= tuning.parry_radius:
 		parries += 1
 		hope = minf(100.0, hope + tuning.hope_reward)
+		if upgrade_rank("armor") > 0:
+			armor_until = tick + 24
 		flash = 1.0
 		feedback.emit("parry_success", global_position)
 		return "parried"
-	if is_dashing() or tick < invulnerable_until:
+	if is_dashing() or tick < invulnerable_until or tick < armor_until:
 		return "evaded"
-	if not practice_invulnerable:
-		health -= 1
+	health -= 1
 	hits_taken += 1
 	invulnerable_until = tick + tuning.damage_invulnerability_frames
 	flash = 1.0
@@ -151,6 +170,7 @@ func reset_integrity() -> void:
 	active = true
 	health = max_health
 	invulnerable_until = -1
+	armor_until = -1
 	dash_until = -1
 	parry_until = -1
 	velocity = Vector2.ZERO
@@ -162,6 +182,9 @@ func _draw() -> void:
 	if is_parrying():
 		draw_circle(Vector2.ZERO, tuning.parry_radius, Color(0.36, 0.95, 0.8, 0.10))
 		draw_arc(Vector2.ZERO, tuning.parry_radius, 0, TAU, 64, Color("75f6d0"), 3, true)
+	if tick < armor_until:
+		draw_circle(Vector2.ZERO, 26, Color("8ef6ef33"))
+		draw_arc(Vector2.ZERO, 26, -PI * 0.5, -PI * 0.5 + TAU * float(armor_until - tick) / 24.0, 40, Color("8ef6ef"), 3, true)
 	var color := Color("70b8ff")
 	if tick < invulnerable_until and tick % 6 < 3:
 		color = Color("ff728b")

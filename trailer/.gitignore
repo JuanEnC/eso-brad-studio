@@ -1,0 +1,5 @@
+node_modules/
+.npm-cache/
+capture/
+out/*
+!out/abyss-trailer.mp4

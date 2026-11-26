@@ -19,6 +19,7 @@ func configure(bounds: Rect2, pillars: Array[Rect2], clearance: float = 22.0) ->
 		for y in range(grid.region.size.y):
 			var cell := Vector2i(x, y)
 			var point := grid.get_point_position(cell)
+			grid.set_point_solid(cell, false)
 			for obstacle in obstacles:
 				if obstacle.grow(CELL * 0.5).has_point(point):
 					grid.set_point_solid(cell)

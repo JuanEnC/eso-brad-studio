@@ -1,30 +1,42 @@
 extends Node2D
 
 const ENEMY := preload("res://scenes/enemy.tscn")
+const LASER := preload("res://scenes/laser_enemy.tscn")
+const BOSS := preload("res://scenes/boss.tscn")
 const PROJECTILE := preload("res://scenes/projectile.tscn")
 const TUNING := preload("res://resources/default_tuning.tres")
+const ROOMS := preload("res://scripts/level_catalog.gd").ROOMS
 const BASE_SIZE := Vector2(1280.0, 800.0)
 const WALL_THICKNESS := 20.0
 const DOOR_SPAN := 116.0
 const DOOR_THICKNESS := 24.0
+const UPGRADES := [
+	{"id": "move", "title": "MOVILIDAD", "description": "+25 de velocidad de movimiento por nivel.", "price": 4, "max_rank": 3},
+	{"id": "rate", "title": "CADENCIA", "description": "Reduce el intervalo entre disparos en 2 ticks por nivel.", "price": 5, "max_rank": 3},
+	{"id": "power", "title": "POTENCIA", "description": "+1 de daño y más FRAC por impacto por nivel.", "price": 6, "max_rank": 3},
+	{"id": "bounce", "title": "REBOTE", "description": "Permite hasta 2 rebotes. Estos impactos suman más FRAC.", "price": 6, "max_rank": 1},
+	{"id": "armor", "title": "PARRY BLINDADO", "description": "Un PARRY exitoso te protege durante 0,4 segundos.", "price": 7, "max_rank": 1},
+	{"id": "critical", "title": "CADENCIA CRÍTICA", "description": "Cada tercer disparo suma +2 de daño, FRAC y aturde.", "price": 8, "max_rank": 1},
+]
 
 var floor_bounds := Rect2(Vector2.ZERO, BASE_SIZE)
 var player: AbyssPlayer
 var enemies: Array[PracticeEnemy] = []
+var boss: PracticeEnemy
 var navigation := RoomNavigation.new()
 var feedback_layer: CombatFeedback
-var practice_mode: bool = false
 var current_room: int = 0
-var room_cleared: Dictionary = {0: true, 1: false, 2: true}
+var room_cleared: Dictionary = {}
 var current_pillars: Array[Rect2] = []
 var doors: Array[Dictionary] = []
 var transitioning: bool = false
+var aura: int = 0
+var shop_pending: bool = false
 var transition_fade: ColorRect
 var door_clock: float = 0.0
 
 func _ready() -> void:
 	player = $Actors/Player
-	player.practice_invulnerable = false
 	feedback_layer = $Feedback
 	player.fired.connect(_shoot)
 	player.feedback.connect(_feedback)
@@ -32,6 +44,10 @@ func _ready() -> void:
 	_create_transition_fade()
 	floor_bounds = get_viewport_rect()
 	_load_room(0, "start")
+	if not get_tree().has_meta("abyss_retry"):
+		$CanvasLayer/HUD.show_start()
+	else:
+		get_tree().remove_meta("abyss_retry")
 	get_viewport().size_changed.connect(_resize_arena)
 
 func _create_transition_fade() -> void:
@@ -47,36 +63,29 @@ func _scaled(value: Vector2) -> Vector2:
 func _point(x: float, y: float) -> Vector2:
 	return floor_bounds.position + _scaled(Vector2(x, y))
 
-func _room_rect(x: float, y: float, width: float, height: float) -> Rect2:
-	return Rect2(_point(x, y), _scaled(Vector2(width, height)))
-
 func _room_pillars(room_id: int) -> Array[Rect2]:
-	match room_id:
-		0:
-			return [_room_rect(570, 294, 44, 86), _room_rect(570, 496, 44, 86)]
-		1:
-			return [_room_rect(476, 216, 44, 132), _room_rect(476, 452, 44, 132), _room_rect(760, 334, 44, 132)]
-		2:
-			return [_room_rect(596, 292, 48, 216)]
-	return []
+	var pillars: Array[Rect2] = []
+	for rect: Rect2 in ROOMS[room_id]["cover"]:
+		pillars.append(Rect2(_point(rect.position.x, rect.position.y), _scaled(rect.size)))
+	return pillars
 
-func _room_enemy_spawns(room_id: int) -> Array[Vector2]:
-	if room_id != 1 or bool(room_cleared.get(room_id, true)):
-		return []
-	return [_point(760, 230), _point(928, 400), _point(760, 594)]
+func room_name() -> String:
+	return ROOMS[current_room]["name"]
+
+func _is_boss_room() -> bool:
+	return ROOMS[current_room].get("boss", false)
 
 func _room_exits(room_id: int) -> Array[Dictionary]:
-	match room_id:
-		0:
-			return [{"side": "right", "target": 1, "entry": "left"}]
-		1:
-			return [{"side": "left", "target": 0, "entry": "right"}, {"side": "right", "target": 2, "entry": "left"}]
-		2:
-			return [{"side": "left", "target": 1, "entry": "right"}]
-	return []
+	var exits: Array[Dictionary] = []
+	if room_id > 0:
+		exits.append({"side": "left", "target": room_id - 1, "entry": "right"})
+	if room_id < ROOMS.size() - 1:
+		exits.append({"side": "right", "target": room_id + 1, "entry": "left"})
+	return exits
 
 func _room_needs_clear() -> bool:
-	return current_room == 1 and not bool(room_cleared.get(current_room, true))
+	var room: Dictionary = ROOMS[current_room]
+	return not room_cleared.has(current_room) and (not room["spawns"].is_empty() or not room.get("laser_spawns", []).is_empty())
 
 func _door_rect(side: String) -> Rect2:
 	var start := floor_bounds.position
@@ -86,22 +95,18 @@ func _door_rect(side: String) -> Rect2:
 			return Rect2(start.x, floor_bounds.get_center().y - DOOR_SPAN * 0.5, DOOR_THICKNESS, DOOR_SPAN)
 		"right":
 			return Rect2(end.x - DOOR_THICKNESS, floor_bounds.get_center().y - DOOR_SPAN * 0.5, DOOR_THICKNESS, DOOR_SPAN)
-		"top":
-			return Rect2(floor_bounds.get_center().x - DOOR_SPAN * 0.5, start.y, DOOR_SPAN, DOOR_THICKNESS)
-		"bottom":
-			return Rect2(floor_bounds.get_center().x - DOOR_SPAN * 0.5, end.y - DOOR_THICKNESS, DOOR_SPAN, DOOR_THICKNESS)
 	return Rect2()
 
 func _configure_doors() -> void:
 	doors.clear()
-	var open := not _room_needs_clear()
+	var open := not shop_pending and not _room_needs_clear()
 	for exit_data in _room_exits(current_room):
 		var door := exit_data.duplicate()
 		door["rect"] = _door_rect(str(door["side"]))
 		door["open"] = open
 		doors.append(door)
 
-func _wall(rect: Rect2) -> void:
+func _wall(rect: Rect2) -> StaticBody2D:
 	var body := StaticBody2D.new()
 	body.position = rect.get_center()
 	body.collision_layer = 1
@@ -112,6 +117,7 @@ func _wall(rect: Rect2) -> void:
 	shape.shape = box
 	body.add_child(shape)
 	$Geometry.add_child(body)
+	return body
 
 func _doors_on_side(side: String) -> Array[Rect2]:
 	var openings: Array[Rect2] = []
@@ -132,6 +138,7 @@ func _vertical_boundary(x: float, openings: Array[Rect2]) -> void:
 
 func _clear_geometry() -> void:
 	for node in $Geometry.get_children():
+		$Geometry.remove_child(node)
 		node.queue_free()
 
 func _build_geometry() -> void:
@@ -144,20 +151,20 @@ func _build_geometry() -> void:
 	_vertical_boundary(end.x, _doors_on_side("right"))
 	for pillar in current_pillars:
 		_wall(pillar)
-	var obstacles: Array[Rect2] = current_pillars.duplicate()
 	for door in doors:
 		if not bool(door["open"]):
-			var door_rect: Rect2 = door["rect"]
-			_wall(door_rect)
-			obstacles.append(door_rect.grow(18.0))
-	navigation.configure(floor_bounds, obstacles)
+			door["body"] = _wall(door["rect"])
+	navigation.configure(floor_bounds, current_pillars, 42.0 if _is_boss_room() else 22.0)
 
 func _clear_room_content() -> void:
 	for actor in $Actors.get_children():
 		if actor != player:
+			$Actors.remove_child(actor)
 			actor.queue_free()
 	enemies.clear()
+	boss = null
 	for projectile in $Projectiles.get_children():
+		$Projectiles.remove_child(projectile)
 		projectile.queue_free()
 
 func _place_player(entry: String) -> void:
@@ -177,8 +184,12 @@ func _load_room(room_id: int, entry: String) -> void:
 	_configure_doors()
 	_build_geometry()
 	_place_player(entry)
-	for spawn_point in _room_enemy_spawns(room_id):
-		_spawn_enemy(spawn_point)
+	if _room_needs_clear():
+		var scene := BOSS if _is_boss_room() else ENEMY
+		for spawn_point: Vector2 in ROOMS[room_id]["spawns"]:
+			_spawn_enemy(_point(spawn_point.x, spawn_point.y), scene)
+		for spawn_point: Vector2 in ROOMS[room_id].get("laser_spawns", []):
+			_spawn_enemy(_point(spawn_point.x, spawn_point.y), LASER)
 	queue_redraw()
 
 func _resize_arena() -> void:
@@ -196,14 +207,19 @@ func _resize_arena() -> void:
 			enemy.global_position = enemy.global_position.clamp(safe.position, safe.end)
 	queue_redraw()
 
-func _spawn_enemy(where: Vector2) -> PracticeEnemy:
-	var enemy := ENEMY.instantiate() as PracticeEnemy
+func _spawn_enemy(where: Vector2, scene: PackedScene) -> PracticeEnemy:
+	var enemy := scene.instantiate() as PracticeEnemy
+	if scene == BOSS:
+		boss = enemy
 	enemy.global_position = where
 	enemy.player = player
+	enemy.speed_scale = ROOMS[current_room].get("speed_scale", 1.0)
+	enemy.attack_delay_scale = ROOMS[current_room].get("attack_delay_scale", 1.0)
 	enemy.dummy = false
 	enemy.navigation = navigation
 	enemy.feedback.connect(_feedback)
-	enemy.destroyed.connect(_on_enemy_destroyed.bind(enemy))
+	var reward := 10 if scene == BOSS else (5 if scene == LASER else 3)
+	enemy.destroyed.connect(_on_enemy_destroyed.bind(reward))
 	$Actors.add_child(enemy)
 	enemies.append(enemy)
 	return enemy
@@ -215,19 +231,54 @@ func _active_enemy_count() -> int:
 			count += 1
 	return count
 
-func _on_enemy_destroyed(where: Vector2, _enemy: PracticeEnemy) -> void:
+func _on_enemy_destroyed(where: Vector2, earned: int) -> void:
 	_feedback("destroyed", where)
+	aura += earned
+	feedback_layer.burst(where, Color("ffd487"), 28.0, "+%d AURA" % earned)
 	if _room_needs_clear() and _active_enemy_count() == 0:
 		room_cleared[current_room] = true
-		_refresh_doors()
+		if _is_boss_room():
+			boss = null
+			_on_victory.call_deferred()
+		else:
+			shop_pending = true
+			player.velocity = Vector2.ZERO
+			player.dash_until = -1
+			player.parry_until = -1
+			$CanvasLayer/HUD.show_shop()
+
+func shop_offers() -> Array[Dictionary]:
+	var offers: Array[Dictionary] = []
+	for upgrade in UPGRADES:
+		var offer: Dictionary = upgrade.duplicate()
+		var rank := player.upgrade_rank(offer["id"])
+		offer["rank"] = rank
+		offer["price"] += rank * 2
+		offers.append(offer)
+	return offers
+
+func buy_upgrade(id: String) -> bool:
+	if not shop_pending:
+		return false
+	for offer in shop_offers():
+		if offer["id"] == id and offer["rank"] < offer["max_rank"] and aura >= offer["price"]:
+			aura -= offer["price"]
+			player.upgrade_ranks[id] = offer["rank"] + 1
+			return true
+	return false
+
+func finish_shop() -> void:
+	if not shop_pending:
+		return
+	shop_pending = false
+	_refresh_doors()
+	get_tree().paused = false
 
 func _refresh_doors() -> void:
-	var open := not _room_needs_clear()
-	for index in doors.size():
-		var door := doors[index]
-		door["open"] = open
-		doors[index] = door
-	_build_geometry()
+	for door in doors:
+		door["open"] = true
+		door["body"].queue_free()
+		door.erase("body")
 	queue_redraw()
 
 func _check_doors() -> void:
@@ -237,7 +288,9 @@ func _check_doors() -> void:
 		if not bool(door["open"]):
 			continue
 		var door_rect: Rect2 = door["rect"]
-		if door_rect.grow(44.0).has_point(player.global_position):
+		var position_in_room := player.global_position
+		var near_edge := position_in_room.x <= door_rect.end.x if door["side"] == "left" else position_in_room.x >= door_rect.position.x
+		if near_edge and absf(position_in_room.y - door_rect.get_center().y) <= DOOR_SPAN * 0.5 - 14.0:
 			_begin_room_transition(int(door["target"]), str(door["entry"]))
 			return
 
@@ -247,6 +300,8 @@ func _begin_room_transition(target: int, entry: String) -> void:
 	transitioning = true
 	player.active = false
 	player.velocity = Vector2.ZERO
+	player.dash_until = -1
+	player.parry_until = -1
 	for projectile in $Projectiles.get_children():
 		projectile.queue_free()
 	var tween := create_tween()
@@ -260,23 +315,27 @@ func _switch_room(target: int, entry: String) -> void:
 
 func _finish_room_transition() -> void:
 	player.active = true
-	player.practice_invulnerable = false
 	transitioning = false
 
 func _physics_process(delta: float) -> void:
 	door_clock += delta
 	if player.active and not transitioning:
-		player.hope = maxf(1.0, player.hope - TUNING.hope_drain_per_second * delta)
+		if _room_needs_clear():
+			player.hope = maxf(1.0, player.hope - TUNING.hope_drain_per_second * delta)
 		_check_doors()
 	queue_redraw()
 
-func _shoot(origin: Vector2, direction: Vector2) -> void:
+func _shoot(origin: Vector2, direction: Vector2, critical: bool = false) -> void:
 	var bullet := PROJECTILE.instantiate() as BasicProjectile
 	bullet.global_position = origin
 	bullet.direction = direction
 	bullet.speed = TUNING.projectile_speed
-	bullet.damage = TUNING.projectile_damage
+	bullet.damage = player.projectile_damage() + (2 if critical else 0)
+	bullet.critical = critical
+	if player.upgrade_rank("bounce") > 0:
+		bullet.bounces_left = BasicProjectile.MAX_BOUNCES
 	bullet.impact.connect(func(where: Vector2): _effect(where, Color("75f6d0"), 12.0))
+	bullet.ricochet.connect(func(where: Vector2): _feedback("ricochet", where))
 	$Projectiles.add_child(bullet)
 
 func _effect(where: Vector2, color: Color, radius: float = 50.0) -> void:
@@ -285,22 +344,13 @@ func _effect(where: Vector2, color: Color, radius: float = 50.0) -> void:
 func _feedback(kind: String, where: Vector2) -> void:
 	feedback_layer.trigger(kind, where)
 
-func toggle_practice() -> void:
-	practice_mode = false
-	player.practice_invulnerable = false
-
 func _on_death() -> void:
-	$CanvasLayer/HUD.show_overlay("FIN DE LA PRUEBA", "Recibiste 3 golpes. Reinicia y prueba otra vez.", true)
+	$CanvasLayer/HUD.show_result(false)
 
-func _room_color() -> Color:
-	match current_room:
-		0:
-			return Color("0c1724")
-		1:
-			return Color("171522")
-		2:
-			return Color("0d1925")
-	return Color("0c1724")
+func _on_victory() -> void:
+	player.active = false
+	player.velocity = Vector2.ZERO
+	$CanvasLayer/HUD.show_result(true)
 
 func _draw_door(door: Dictionary) -> void:
 	var rect: Rect2 = door["rect"]
@@ -312,21 +362,30 @@ func _draw_door(door: Dictionary) -> void:
 	draw_rect(rect, fill)
 	draw_rect(rect, color, false, 2.0)
 	var center := rect.get_center()
-	if str(door["side"]) in ["left", "right"]:
-		draw_line(center - Vector2(0, rect.size.y * 0.33), center + Vector2(0, rect.size.y * 0.33), color, 3.0, true)
-		if not open:
-			draw_line(center - Vector2(18, 0), center + Vector2(18, 0), color, 2.0, true)
+	if open:
+		var direction := 1.0 if door["side"] == "right" else -1.0
+		draw_polyline(PackedVector2Array([
+			center + Vector2(-5.0 * direction, -12),
+			center + Vector2(5.0 * direction, 0),
+			center + Vector2(-5.0 * direction, 12),
+		]), color, 2.0, true)
 	else:
-		draw_line(center - Vector2(rect.size.x * 0.33, 0), center + Vector2(rect.size.x * 0.33, 0), color, 3.0, true)
-		if not open:
-			draw_line(center - Vector2(0, 18), center + Vector2(0, 18), color, 2.0, true)
+		draw_line(center - Vector2(6, 9), center + Vector2(6, 9), color, 2.0, true)
+		draw_line(center - Vector2(6, -9), center + Vector2(6, -9), color, 2.0, true)
 
 func _draw() -> void:
-	draw_rect(floor_bounds, _room_color())
-	for x in range(floori(floor_bounds.position.x), ceili(floor_bounds.end.x), 40):
-		draw_line(Vector2(x, floor_bounds.position.y), Vector2(x, floor_bounds.end.y), Color("132231"), 1.0)
-	for y in range(floori(floor_bounds.position.y), ceili(floor_bounds.end.y), 40):
-		draw_line(Vector2(floor_bounds.position.x, y), Vector2(floor_bounds.end.x, y), Color("132231"), 1.0)
+	var floor_color: Color = ROOMS[current_room]["color"]
+	draw_rect(floor_bounds, floor_color)
+	var grid_color := floor_color.lightened(0.028)
+	for x in range(floori(floor_bounds.position.x), ceili(floor_bounds.end.x), 48):
+		draw_line(Vector2(x, floor_bounds.position.y), Vector2(x, floor_bounds.end.y), grid_color, 1.0)
+	for y in range(floori(floor_bounds.position.y), ceili(floor_bounds.end.y), 48):
+		draw_line(Vector2(floor_bounds.position.x, y), Vector2(floor_bounds.end.x, y), grid_color, 1.0)
+	draw_rect(floor_bounds.grow(-16), Color("314153"), false, 1.0)
+	if _is_boss_room():
+		var center := floor_bounds.get_center()
+		draw_arc(center, 180, 0, TAU, 96, Color("3b273d"), 2.0, true)
+		draw_arc(center, 199, 0, TAU, 96, Color("322338"), 1.0, true)
 	for pillar in current_pillars:
 		draw_rect(Rect2(pillar.position + Vector2(5, 6), pillar.size), Color(0, 0, 0, 0.3))
 		draw_rect(pillar, Color("2e3e4f"))

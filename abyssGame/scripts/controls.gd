@@ -17,7 +17,6 @@ func _ready() -> void:
 	_bind("parry", [KEY_Q], -1, 0.0, MOUSE_BUTTON_RIGHT, JOY_BUTTON_LEFT_SHOULDER)
 	_bind("shoot", [KEY_J], JOY_AXIS_TRIGGER_RIGHT, 1.0, MOUSE_BUTTON_LEFT, JOY_BUTTON_RIGHT_SHOULDER)
 	_bind("restart", [KEY_R], -1, 0.0, MOUSE_BUTTON_NONE, JOY_BUTTON_BACK)
-	_bind("practice", [KEY_T], -1, 0.0, MOUSE_BUTTON_NONE, JOY_BUTTON_Y)
 	_bind("pause_game", [KEY_ESCAPE, KEY_P], -1, 0.0, MOUSE_BUTTON_NONE, JOY_BUTTON_START)
 	_bind("help", [KEY_F1])
 	_bind("start_game", [KEY_ENTER], -1, 0.0, MOUSE_BUTTON_NONE, JOY_BUTTON_A)

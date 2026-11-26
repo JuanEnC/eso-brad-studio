@@ -1,0 +1,27 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/laser_enemy.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/tuning.gd" id="2"]
+
+[sub_resource type="Resource" id="Tuning"]
+resource_local_to_scene = true
+script = ExtResource("2")
+enemy_health = 6
+enemy_speed = 72.0
+enemy_attack_range = 515.0
+enemy_prepare_frames = 41
+enemy_telegraph_frames = 9
+enemy_recovery_frames = 65
+
+[sub_resource type="CircleShape2D" id="Shape"]
+radius = 20.0
+
+[node name="LaserArtillery" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1")
+tuning = SubResource("Tuning")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape")

@@ -14,17 +14,40 @@ var priority_until: float = 0.0
 var priority_level: int = 0
 var voice_index: int = 0
 var font: Font = ThemeDB.fallback_font
+const SOUND_VARIANTS := {
+	"prepare": ["warning", 0.65, -23.0],
+	"strike": ["hit", 0.74, -21.0],
+	"armor": ["hit", 1.35, -20.0],
+	"ricochet": ["hit", 1.85, -21.0],
+	"critical_shot": ["shot", 0.72, -15.0],
+	"laser_fire": ["warning", 0.48, -13.0],
+	"shield_break": ["frequency_break", 1.18, -8.0],
+	"boss_phase": ["frequency_break", 0.63, -8.0],
+}
+const SOUND_PRIORITY := {
+	"parry_success": 80, "frequency_break": 100, "hurt": 60,
+	"shield_break": 110, "boss_phase": 120,
+}
 
 func _ready() -> void:
 	for sound in ["shot", "hit", "hurt", "parry_success", "warning", "dash", "frequency_break"]:
 		streams[sound] = load("res://assets/audio/" + sound + ".wav")
 	priority_voice = AudioStreamPlayer.new()
 	priority_voice.name = "ResonanceVoice"
+	priority_voice.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(priority_voice)
 	for i in range(8):
 		var voice := AudioStreamPlayer.new()
+		voice.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(voice)
 		voices.append(voice)
+
+func _exit_tree() -> void:
+	priority_voice.stop()
+	priority_voice.stream = null
+	for voice in voices:
+		voice.stop()
+		voice.stream = null
 
 func _physics_process(delta: float) -> void:
 	clock += delta
@@ -58,20 +81,30 @@ func trigger(kind: String, where: Vector2) -> void:
 			screen_flash = 0.25
 		"dash": burst(where, Color("70b8ff"), 38.0)
 		"hit": burst(where, Color("ffba69"), 16.0)
+		"armor": burst(where, Color("b4a0ca"), 22.0)
+		"ricochet": burst(where, Color("ffbf82"), 18.0)
 		"strike": burst(where, Color("ff728b"), 62.0)
 		"destroyed": burst(where, Color("ffba69"), 45.0)
+		"shield_break": burst(where, Color("b7e7ff"), 98.0, "ESCUDO ROTO")
+		"boss_phase":
+			burst(where, Color("ff768e"), 135.0, "FASE II")
+			screen_color = Color("ff768e")
+			screen_flash = 0.45
 	play_sound(kind)
 
 func play_sound(kind: String) -> void:
-	if not streams.has(kind) or streams[kind] == null:
+	var cue: Array = SOUND_VARIANTS.get(kind, [kind, 1.0, -19.0 if kind == "shot" else -14.0])
+	var stream: AudioStream = streams.get(cue[0])
+	if stream == null:
 		return
-	var level := {"parry_success": 80, "frequency_break": 100, "hurt": 60}.get(kind, 0) as int
+	var level: int = SOUND_PRIORITY.get(kind, 0)
 	if level > 0:
 		if clock < priority_until and level < priority_level:
 			return
 		priority_level = level
-		priority_until = clock + streams[kind].get_length()
-		priority_voice.stream = streams[kind]
+		priority_until = clock + stream.get_length() / float(cue[1])
+		priority_voice.stream = stream
+		priority_voice.pitch_scale = cue[1]
 		priority_voice.volume_db = -8.0
 		priority_voice.play()
 		for voice in voices:
@@ -80,8 +113,9 @@ func play_sound(kind: String) -> void:
 		return
 	var voice := voices[voice_index]
 	voice_index = (voice_index + 1) % voices.size()
-	voice.stream = streams[kind]
-	voice.volume_db = -26.0 if clock < priority_until else (-19.0 if kind == "shot" else -14.0)
+	voice.stream = stream
+	voice.pitch_scale = cue[1]
+	voice.volume_db = -26.0 if clock < priority_until else cue[2]
 	voice.play()
 	sound_played.emit(kind, false)
 

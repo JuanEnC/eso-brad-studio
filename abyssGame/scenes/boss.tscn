@@ -1,0 +1,30 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/boss.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/tuning.gd" id="2"]
+
+[sub_resource type="Resource" id="Tuning"]
+resource_local_to_scene = true
+script = ExtResource("2")
+enemy_health = 30
+enemy_speed = 170.0
+enemy_attack_range = 94.0
+enemy_recovery_frames = 42
+frequency_per_shot = 9.0
+banked_frequency_bonus = 11.0
+frequency_per_parry = 46.0
+frequency_break_frames = 132
+stun_frames = 40
+
+[sub_resource type="CircleShape2D" id="Shape"]
+radius = 36.0
+
+[node name="Guardian" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1")
+tuning = SubResource("Tuning")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape")
